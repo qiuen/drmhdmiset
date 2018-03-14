@@ -44,8 +44,6 @@ include_directories("${PROJECT_SOURCE_DIR}/../../../..//buildroot/output/host/us
 
 link_directories("${PROJECT_SOURCE_DIR}/../../../../buildroot/output/host/usr/aarch64-rockchip-linux-gnu/sysroot/usr/lib")
 
-
-
 link_libraries("libdrm.so")
 
 link_libraries("libpthread.so")
