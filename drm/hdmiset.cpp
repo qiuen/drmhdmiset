@@ -6,7 +6,7 @@
 #include <fcntl.h>
 using namespace android;
 
-static HdmiInfo_t hdmi_info[50];
+static HdmiInfo_t hdmi_info[200];
 static int mode_count = 0;
 static DrmResources *_drm = NULL;
 
