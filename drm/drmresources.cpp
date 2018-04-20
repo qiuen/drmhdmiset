@@ -603,13 +603,13 @@ int DrmResources::Init(int drm_fd) {
  // ret = compositor_.Init();
   if (ret)
     return ret;
-
+ /*
   ret = event_listener_.Init();
   if (ret) {
     ALOGE("Can't initialize event listener %d", ret);
     return ret;
   }
-
+*/
   return 0;
 }
 
@@ -890,8 +890,8 @@ int DrmResources::UpdateDisplayRoute(void)
     mode_changed = true;
   }
   printf("UpdateDisplayRoute000000000000000\n");
-  if (!enable_changed_ && !mode_changed)
-    return 0;
+  /*if (!enable_changed_ && !mode_changed)
+    return 0;*/
   DrmConnector *primary = GetConnectorFromType(HWC_DISPLAY_PRIMARY);
   if (!primary) {
     printf("Failed to find primary display\n");
