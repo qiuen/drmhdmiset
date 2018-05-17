@@ -148,7 +148,8 @@ int DrmConnector::UpdateModes() {
     bool exists = false;
     bool verify = false;
     for (const DrmMode &mode : modes_) {
-      if (mode == c->modes[i] && drm_->mode_verify(mode)) {
+      if (mode == c->modes[i] && (drm_->mode_verify(mode) || type_ == DRM_MODE_CONNECTOR_TV)) {
+        printf("############################new_modes.push_back\n");
         new_modes.push_back(mode);
         exists = true;
         break;
@@ -158,13 +159,14 @@ int DrmConnector::UpdateModes() {
     if (exists)
       continue;
     DrmMode m(&c->modes[i]);
-    if (!drm_->mode_verify(m))
+    if (!drm_->mode_verify(m) && type_==DRM_MODE_CONNECTOR_HDMIA)
       continue;
     m.set_id(drm_->next_mode_id());
 	printf("set_id=%d\n",m.id());
     new_modes.push_back(m);
   }
   modes_.swap(new_modes);
+  free(c);
   return 0;
 }
 

@@ -156,6 +156,14 @@ void DrmResources::init_white_modes(void)
       continue; \
     } \
     m.x = atoi(_##x->GetText())
+  #define PARSE_HEX(x) \
+    tinyxml2::XMLElement* _##x = resolution->FirstChildElement(#x); \
+    if (!_##x) { \
+      ALOGE("------> failed to parse %s\n", #x); \
+      resolution = resolution->NextSiblingElement(); \
+      continue; \
+    } \
+    sscanf(_##x->GetText(), "%x", &m.x);
     PARSE(clock);
     PARSE(hdisplay);
     PARSE(hsync_start);
@@ -166,7 +174,7 @@ void DrmResources::init_white_modes(void)
     PARSE(vsync_end);
     PARSE(vscan);
     PARSE(vrefresh);
-    PARSE(flags);
+    PARSE_HEX(flags);
     PARSE(htotal);
 
     DrmMode mode(&m);

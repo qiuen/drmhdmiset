@@ -44,11 +44,12 @@ DrmMode::DrmMode(drmModeModeInfoPtr m)
       flags_(m->flags),
       type_(m->type),
       name_(m->name) {
-      //interlaced_ = !!(flags_ & DRM_MODE_FLAG_INTERLACE);
-      printf("+++++new DrmMode w=%d, h=%d,flags_=0x%x\n",h_display_,v_display_,flags_);
-      if (flags_ == 0x15 || flags_==8001 || flags_==0x1015) {
-        interlaced_ = 1;
-      }
+      interlaced_ = !!(flags_ & DRM_MODE_FLAG_INTERLACE);
+      printf("++++++++++++++++++++++new DrmMode interlaced_=%d\n",interlaced_);
+     // printf("+++++new DrmMode w=%d, h=%d,flags_=0x%x\n",h_display_,v_display_,flags_);
+      //if (flags_ == 0x15 || flags_==8001 || flags_==0x1015) {
+      //  interlaced_ = 1;
+      //}
 }
 
 DrmMode::~DrmMode()
