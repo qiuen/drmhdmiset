@@ -47,8 +47,8 @@ class DrmConnector {
   void set_display_possible(int display_bit);
 
   bool built_in() const;
-
-  int UpdateModes();
+  int  type();
+  int  UpdateModes();
 
   const std::vector<DrmMode> &modes() const {
     return modes_;

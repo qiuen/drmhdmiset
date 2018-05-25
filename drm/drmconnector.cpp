@@ -109,6 +109,9 @@ int DrmConnector::display() const {
   return display_;
 }
 
+int DrmConnector::type() {
+  return type_;
+}
 void DrmConnector::set_display(int display) {
   display_ = display;
 }
