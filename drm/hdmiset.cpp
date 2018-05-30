@@ -321,13 +321,17 @@ static int findSuitableInfoSlot(struct disp_info* info, int type)
         if (info->screen_list[i].type !=0 && info->screen_list[i].type == type) {
             found = i;
             break;
-        } else if (info->screen_list[i].type !=0 && found == -1){
-            found = i;
-        }
+        } 
     }
     if (found == -1) {
-        found = 0;
-        printf("noting saved, used the first slot");
+       for (int i=0;i<5;i++) {
+	//	printf("+++++++++++++++++i=%d,type=%d,%d\n",i, type,info->screen_list[i].type);
+        if (info->screen_list[i].type ==0) {
+            found = i;
+            break;
+        } 
+      }
+
     }
     printf("findSuitableInfoSlot: %d type=%d", found, type);
     return found;
