@@ -275,7 +275,6 @@ int hdmi_get_current_mode(int *xres, int *yres) {
        int ret = read(fd, value, 50);
        if (ret > 0) {
          sscanf(value, "%dx%d", xres, yres);
-         printf("+++++hdmi_get_current_mode:xres=%d, yres=%d\n", *xres, *yres);
        }     
    }
    if (fd > 0) {
