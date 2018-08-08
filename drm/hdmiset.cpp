@@ -4,6 +4,7 @@
 #include "hdmiset.h"
 #include "string.h"
 #include <fcntl.h>
+#include <tinyxml2.h>
 using namespace android;
 
 #define BUFFER_LENGTH    256
@@ -47,6 +48,28 @@ struct drm_display_mode {
     unsigned int flags;
     int picture_aspect_ratio;
 };
+
+typedef struct {
+	
+	uint32_t clock;
+	uint32_t hdisplay;
+	uint32_t hsync_start;
+	uint32_t hsync_end;
+	uint32_t hskew;
+	uint32_t vdisplay;
+	uint32_t vsync_start;
+	uint32_t vsync_end;
+	uint32_t vscan;
+	uint32_t vrefresh;
+	uint32_t flags;
+	uint32_t htotal;
+	
+} drm_mode_info_t;
+
+typedef struct {
+	int count;
+	drm_mode_info_t drm_mode_info[35];
+} drm_mode_info_list_t;
 
 enum output_format {
     output_rgb=0,
@@ -121,6 +144,7 @@ static char const *const device_template[] =
 };
 
 static HdmiInfo_t hdmi_info[200];
+static drm_mode_info_list_t  drm_mode_info_list;
 static int mode_count = 0;
 static HdmiInfo_t best_mode;
 static DrmResources *_drm = NULL;
@@ -177,7 +201,6 @@ int hdmi_get_last_resolution(int* xres, int* yres, int* refresh, bool* interlace
 	getBaseParameterInfo(&base_paramer);
     
 	slot = findSuitableInfoSlot(&base_paramer.main, type);
-	printf("================================hdmi_get_last_resolution:slot=%d\n",slot);	
 	*xres = base_paramer.main.screen_list[slot].resolution.hdisplay;
 	*yres = base_paramer.main.screen_list[slot].resolution.vdisplay;		
 	*refresh = base_paramer.main.screen_list[slot].resolution.vrefresh;
@@ -218,7 +241,6 @@ int hdmi_set_resolution(int xres, int yres, int refresh, bool interlaced) {
           break;
         }
     }
-    printf("@@@@@@@@@@@conn mode count=%d\n",count);
    // printf("+++++hdmi_set_resolution end\n");
     return 0;
 }
@@ -229,7 +251,6 @@ int UpdateDisplaySize(int src_xpos, int src_ypos, int src_w, int src_h, int dst_
 
 
 int hdmi_get_resolution(Hdmi_Info_list_t *list) {
-    printf("++++--------------hdmi_get_resolution begin \n");
     int display = 0;
     if (_drm == NULL) {
         return 0;
@@ -244,7 +265,6 @@ int hdmi_get_resolution(Hdmi_Info_list_t *list) {
        hdmi_info[i].xres = conn_mode.h_display();
        hdmi_info[i].yres = conn_mode.v_display();
        hdmi_info[i].reserved[0] = conn_mode.clock();
-       printf("++++hdmi_get_resolution refresh=%d,interlaced=%d,xres=%d,yres=%d\n",hdmi_info[i].refresh,hdmi_info[i].interlaced,hdmi_info[i].xres,hdmi_info[i].yres);
        i++;
     }
     list->hdmimode = &hdmi_info[0];
@@ -316,7 +336,6 @@ static int findSuitableInfoSlot(struct disp_info* info, int type)
 {
     int found=-1;
     for (int i=0;i<5;i++) {
-		printf("+++++++++++++++++i=%d,type=%d,%d\n",i, type,info->screen_list[i].type);
         if (info->screen_list[i].type !=0 && info->screen_list[i].type == type) {
             found = i;
             break;
@@ -324,7 +343,6 @@ static int findSuitableInfoSlot(struct disp_info* info, int type)
     }
     if (found == -1) {
        for (int i=0;i<5;i++) {
-	//	printf("+++++++++++++++++i=%d,type=%d,%d\n",i, type,info->screen_list[i].type);
         if (info->screen_list[i].type ==0) {
             found = i;
             break;
@@ -348,7 +366,6 @@ static bool getBaseParameterInfo(struct file_base_paramer* base_paramer)
             printf("getBaseParameterInfo size=%d\n", (int)sizeof(*base_paramer));
             if (length >  sizeof(*base_paramer)) {
                 read(file, (void*)&(base_paramer->main), sizeof(base_paramer->main));
-				printf("==================getBaseParameterInfo hdisplay=%d\n", base_paramer->main.screen_list[1].resolution.hdisplay);
                 lseek(file, BASE_OFFSET, SEEK_SET);
                 read(file, (void*)&(base_paramer->aux), sizeof(base_paramer->aux));
                 return true;
@@ -397,7 +414,6 @@ static void saveModeConfig(const DrmMode *mode, int conn_type) {
 	
 	//if (conn_type == DRM_MODE_CONNECTOR_TV) {
 	slot = findSuitableInfoSlot(&base_paramer.main, conn_type);	
-	printf("++++++++++++++++++++++++++++++saveModeConfig slot=%d,conn_type=%d\n",slot,conn_type);
 	base_paramer.main.screen_list[slot].type = conn_type;
 	base_paramer.main.screen_list[slot].resolution.hdisplay = mode->h_display();
 	base_paramer.main.screen_list[slot].resolution.vdisplay = mode->v_display();
@@ -427,390 +443,111 @@ static void saveModeConfig(const DrmMode *mode, int conn_type) {
 		base_paramer.main.screen_list[slot].resolution.flags = mode->flags();
 		base_paramer.main.screen_list[slot].resolution.vrefresh = mode->v_refresh();
 	}*/
-
-	
 	lseek(file, 0L, SEEK_SET);
 	write(file, (char*)(&base_paramer.main), sizeof(base_paramer.main));
 	lseek(file, BASE_OFFSET, SEEK_SET);
 	write(file, (char*)(&base_paramer.aux), sizeof(base_paramer.aux));
 	close(file);
-	sync();
-	
-    printf("*********************************write hdmi mode succ,slot=%d.\n",slot);
-	
-}
-#if 0
-static void nativeSaveConfig() {
-    char buf[BUFFER_LENGTH];
-    bool isMainHdmiConnected=false;
-    bool isAuxHdmiConnected = false;
-    int foundMainIdx=-1,foundAuxIdx=-1;
-    struct file_base_paramer base_paramer;
-    int   display = 0;
-    if (primary != NULL) {
-		 DrmConnector *c = _drm->GetConnectorFromType(display);
-        std::vector<DrmMode> mModes =  c->modes();
-        char resolution[200];
-        unsigned int w=0,h=0,hsync_start=0,hsync_end=0,htotal=0;
-        unsigned int vsync_start=0,vsync_end=0,vtotal=0,flags=0;
-        float vfresh=0.0000;
-
-       /* property_get("persist.sys.resolution.main", resolution, "0x0@0.00-0-0-0-0-0-0-0");
-        if (strncmp(resolution, "Auto", 4) != 0 && strncmp(resolution, "0x0p0-0", 7) !=0)
-            sscanf(resolution,"%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &w, &h, &vfresh, &hsync_start,&hsync_end,
-                    &htotal,&vsync_start,&vsync_end, &vtotal, &flags);*/
-        for (size_t c = 0; c < mModes.size(); ++c){
-            const DrmMode& info = mModes[c];
-            char curDrmModeRefresh[16];
-            char curRefresh[16];
-            float mModeRefresh;
-            if (info.flags() & DRM_MODE_FLAG_INTERLACE)
-                mModeRefresh = info.clock()*2 / (float)(info.v_total()* info.h_total()) * 1000.0f;
-            else
-                mModeRefresh = info.clock()/ (float)(info.v_total()* info.h_total()) * 1000.0f;
-            sprintf(curDrmModeRefresh, "%.2f", mModeRefresh);
-            sprintf(curRefresh, "%.2f", vfresh);
-            if (info.h_display() == w &&
-                    info.v_display() == h &&
-                    info.h_sync_start() == hsync_start &&
-                    info.h_sync_end() == hsync_end &&
-                    info.h_total() == htotal &&
-                    info.v_sync_start() == vsync_start &&
-                    info.v_sync_end() == vsync_end &&
-                    info.v_total()==vtotal &&
-                    atof(curDrmModeRefresh)==atof(curRefresh)) {
-                ALOGD("***********************found main idx %d ****************", (int)c);
-                foundMainIdx = c;
-                sprintf(buf, "display=%d,iface=%d,enable=%d,mode=%s\n",
-                        primary->display(), primary->get_type(), primary->state(), resolution);
-                break;
-            }
-        }
-    }
-
-    if (extend != NULL) {
-        std::vector<DrmMode> mModes = extend->modes();
-        char resolution[PROPERTY_VALUE_MAX];
-        unsigned int w=0,h=0,hsync_start=0,hsync_end=0,htotal=0;
-        unsigned int vsync_start=0,vsync_end=0,vtotal=0,flags;
-        float vfresh=0;
-
-        property_get("persist.sys.resolution.aux", resolution, "0x0@0.00-0-0-0-0-0-0-0");
-        if (strncmp(resolution, "Auto", 4) != 0 && strncmp(resolution, "0x0p0-0", 7) !=0)
-            sscanf(resolution,"%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &w, &h, &vfresh, &hsync_start,&hsync_end,&htotal,&vsync_start,&vsync_end,
-                    &vtotal, &flags);
-        for (size_t c = 0; c < mModes.size(); ++c){
-            const DrmMode& info = mModes[c];
-            char curDrmModeRefresh[16];
-            char curRefresh[16];
-            float mModeRefresh;
-            if (info.flags() & DRM_MODE_FLAG_INTERLACE)
-                mModeRefresh = info.clock()*2 / (float)(info.v_total()* info.h_total()) * 1000.0f;
-            else
-                mModeRefresh = info.clock()/ (float)(info.v_total()* info.h_total()) * 1000.0f;
-            sprintf(curDrmModeRefresh, "%.2f", mModeRefresh);
-            sprintf(curRefresh, "%.2f", vfresh);
-            if (info.h_display() == w &&
-                    info.v_display() == h &&
-                    info.h_sync_start() == hsync_start &&
-                    info.h_sync_end() == hsync_end &&
-                    info.h_total() == htotal &&
-                    info.v_sync_start() == vsync_start &&
-                    info.v_sync_end() == vsync_end &&
-                    info.v_total()==vtotal &&
-                    atof(curDrmModeRefresh)==atoi(curRefresh)) {
-                ALOGD("***********************found aux idx %d ****************", (int)c);
-                foundAuxIdx = c;
-                break;
-            }
-        }
-    }
-
-    int file;
-    const char *baseparameterfile = GetBaseparameterFile();
-    if (!baseparameterfile) {
-        sync();
-        return;
-    }
-    file = open(baseparameterfile, O_RDWR);
-    if (file < 0) {
-        ALOGW("base paramter file can not be opened");
-        sync();
-        return;
-    }
-    // caculate file's size and read it
-    unsigned int length = lseek(file, 0L, SEEK_END);
-    lseek(file, 0L, SEEK_SET);
-    if(length < sizeof(base_paramer)) {
-        ALOGE("BASEPARAME data's length is error\n");
-        sync();
-        close(file);
-        return;
-    }
-
-    read(file, (void*)&(base_paramer.main), sizeof(base_paramer.main));
-    lseek(file, BASE_OFFSET, SEEK_SET);
-    read(file, (void*)&(base_paramer.aux), sizeof(base_paramer.aux));
-
-    for (auto &conn : drm_->connectors()) {
-        if (conn->state() == DRM_MODE_CONNECTED 
-                && (conn->get_type() == DRM_MODE_CONNECTOR_HDMIA)
-                && (conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
-            isMainHdmiConnected = true;
-        else if(conn->state() == DRM_MODE_CONNECTED 
-                && (conn->get_type() == DRM_MODE_CONNECTOR_HDMIA)
-                && (conn->possible_displays() & HWC_DISPLAY_EXTERNAL_BIT))
-            isAuxHdmiConnected = true;
-    }
-    ALOGD("nativeSaveConfig: size=%d isMainHdmiConnected=%d", (int)sizeof(base_paramer.main), isMainHdmiConnected);
-    for (auto &conn : drm_->connectors()) {
-        if (conn->state() == DRM_MODE_CONNECTED 
-                && (conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT)) {
-            char property[PROPERTY_VALUE_MAX];
-            int w=0,h=0,hsync_start=0,hsync_end=0,htotal=0;
-            int vsync_start=0,vsync_end=0,vtotal=0,flags=0;
-            int left=0,top=0,right=0,bottom=0;
-            float vfresh=0;
-            int slot = findSuitableInfoSlot(&base_paramer.main, conn->get_type());
-            if (isMainHdmiConnected && conn->get_type() == DRM_MODE_CONNECTOR_TV)
-                continue;
-
-            base_paramer.main.screen_list[slot].type = conn->get_type();
-            base_paramer.main.screen_list[slot].feature &= AUTO_BIT_RESET;
-            property_get("persist.sys.resolution.main", property, "0x0@0.00-0-0-0-0-0-0-0");
-            if (strncmp(property, "Auto", 4) != 0 && strncmp(property, "0x0p0-0", 7) !=0) {
-                ALOGD("saveConfig resolution = %s", property);
-                std::vector<DrmMode> mModes = primary->modes();
-                sscanf(property,"%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &w, &h, &vfresh, &hsync_start,&hsync_end,&htotal,&vsync_start,&vsync_end,
-                        &vtotal, &flags);
-
-                ALOGD("last base_paramer.main.resolution.hdisplay = %d,  vdisplay=%d(%s@%f)",
-                        base_paramer.main.screen_list[slot].resolution.hdisplay,
-                        base_paramer.main.screen_list[slot].resolution.vdisplay,
-                        base_paramer.main.hwc_info.device,  base_paramer.main.hwc_info.fps);
-                base_paramer.main.screen_list[slot].resolution.hdisplay = w;
-                base_paramer.main.screen_list[slot].resolution.vdisplay = h;
-                base_paramer.main.screen_list[slot].resolution.hsync_start = hsync_start;
-                base_paramer.main.screen_list[slot].resolution.hsync_end = hsync_end;
-                if (foundMainIdx != -1)
-                    base_paramer.main.screen_list[slot].resolution.clock = mModes[foundMainIdx].clock();
-                else if (flags & DRM_MODE_FLAG_INTERLACE)
-                    base_paramer.main.screen_list[slot].resolution.clock = (htotal*vtotal*vfresh/2)/1000.0f;
-                else
-                    base_paramer.main.screen_list[slot].resolution.clock = (htotal*vtotal*vfresh)/1000.0f;
-                base_paramer.main.screen_list[slot].resolution.htotal = htotal;
-                base_paramer.main.screen_list[slot].resolution.vsync_start = vsync_start;
-                base_paramer.main.screen_list[slot].resolution.vsync_end = vsync_end;
-                base_paramer.main.screen_list[slot].resolution.vtotal = vtotal;
-                base_paramer.main.screen_list[slot].resolution.flags = flags;
-                ALOGD("saveBaseParameter foundMainIdx=%d clock=%d", foundMainIdx, base_paramer.main.screen_list[slot].resolution.clock);
-            } else {
-                base_paramer.main.screen_list[slot].feature|= RESOLUTION_AUTO;
-                memset(&base_paramer.main.screen_list[slot].resolution, 0, sizeof(base_paramer.main.screen_list[slot].resolution));
-            }
-
-            memset(property,0,sizeof(property));
-            property_get("persist.sys.overscan.main", property, "overscan 100,100,100,100");
-            sscanf(property, "overscan %d,%d,%d,%d",
-                    &left,
-                    &top,
-                    &right,
-                    &bottom);
-            base_paramer.main.scan.leftscale = (unsigned short)left;
-            base_paramer.main.scan.topscale = (unsigned short)top;
-            base_paramer.main.scan.rightscale = (unsigned short)right;
-            base_paramer.main.scan.bottomscale = (unsigned short)bottom;
-
-            memset(property,0,sizeof(property));
-            property_get("persist.sys.color.main", property, "Auto");
-            if (strncmp(property, "Auto", 4) != 0){
-                if (strstr(property, "RGB") != 0)
-                    base_paramer.main.screen_list[slot].format = output_rgb;
-                else if (strstr(property, "YCBCR444") != 0)
-                    base_paramer.main.screen_list[slot].format = output_ycbcr444;
-                else if (strstr(property, "YCBCR422") != 0)
-                    base_paramer.main.screen_list[slot].format = output_ycbcr422;
-                else if (strstr(property, "YCBCR420") != 0)
-                    base_paramer.main.screen_list[slot].format = output_ycbcr420;
-                else {
-                    base_paramer.main.screen_list[slot].feature |= COLOR_AUTO;
-                    base_paramer.main.screen_list[slot].format = output_ycbcr_high_subsampling;
-                }
-
-                if (strstr(property, "8bit") != NULL)
-                    base_paramer.main.screen_list[slot].depthc = depth_24bit;
-                else if (strstr(property, "10bit") != NULL)
-                    base_paramer.main.screen_list[slot].depthc = depth_30bit;
-                else
-                    base_paramer.main.screen_list[slot].depthc = Automatic;
-                ALOGD("saveConfig: color=%d-%d", base_paramer.main.screen_list[slot].format, base_paramer.main.screen_list[slot].depthc);
-            } else {
-                base_paramer.main.screen_list[slot].depthc = Automatic;
-                base_paramer.main.screen_list[slot].format = output_ycbcr_high_subsampling;
-                base_paramer.main.screen_list[slot].feature |= COLOR_AUTO;
-            }
-
-            memset(property,0,sizeof(property));
-            property_get("persist.sys.hdcp1x.main", property, "0");
-            if (atoi(property) > 0)
-                base_paramer.main.screen_list[slot].feature |= HDCP1X_EN;
-
-            memset(property,0,sizeof(property));
-            property_get("persist.sys.resolution_white.main", property, "0");
-            if (atoi(property) > 0)
-                base_paramer.main.screen_list[slot].feature |= RESOLUTION_WHITE_EN;
-            saveBcshConfig(&base_paramer, HWC_DISPLAY_PRIMARY_BIT);
-#ifdef TEST_BASE_PARMARTER
-            /*save aux fb & device*/
-            saveHwcInitalInfo(&base_paramer, HWC_DISPLAY_PRIMARY_BIT);
-#endif
-        } else if(conn->state() == DRM_MODE_CONNECTED 
-                && (conn->possible_displays() & HWC_DISPLAY_EXTERNAL_BIT) 
-                && (conn->encoder() != NULL)) {
-            char property[PROPERTY_VALUE_MAX];
-            int w=0,h=0,hsync_start=0,hsync_end=0,htotal=0;
-            int vsync_start=0,vsync_end=0,vtotal=0,flags=0;
-            float vfresh=0;
-            int left=0,top=0,right=0,bottom=0;
-            int slot = findSuitableInfoSlot(&base_paramer.aux, conn->get_type());
-
-            if (isAuxHdmiConnected && conn->get_type() == DRM_MODE_CONNECTOR_TV)
-                continue;
-
-            base_paramer.aux.screen_list[slot].type = conn->get_type();
-            base_paramer.aux.screen_list[slot].feature &= AUTO_BIT_RESET;
-            property_get("persist.sys.resolution.aux", property, "0x0p0-0");
-            if (strncmp(property, "Auto", 4) != 0 && strncmp(property, "0x0p0-0", 7) !=0) {
-                std::vector<DrmMode> mModes = extend->modes();
-                sscanf(property,"%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &w, &h, &vfresh, &hsync_start,&hsync_end,&htotal,&vsync_start,&vsync_end,
-                        &vtotal, &flags);
-                base_paramer.aux.screen_list[slot].resolution.hdisplay = w;
-                base_paramer.aux.screen_list[slot].resolution.vdisplay = h;
-                if (foundMainIdx != -1)
-                    base_paramer.aux.screen_list[slot].resolution.clock = mModes[foundMainIdx].clock();
-                else if (flags & DRM_MODE_FLAG_INTERLACE)
-                    base_paramer.aux.screen_list[slot].resolution.clock = (htotal*vtotal*vfresh/2) / 1000.0f;
-                else
-                    base_paramer.aux.screen_list[slot].resolution.clock = (htotal*vtotal*vfresh) / 1000.0f;
-                base_paramer.aux.screen_list[slot].resolution.hsync_start = hsync_start;
-                base_paramer.aux.screen_list[slot].resolution.hsync_end = hsync_end;
-                base_paramer.aux.screen_list[slot].resolution.htotal = htotal;
-                base_paramer.aux.screen_list[slot].resolution.vsync_start = vsync_start;
-                base_paramer.aux.screen_list[slot].resolution.vsync_end = vsync_end;
-                base_paramer.aux.screen_list[slot].resolution.vtotal = vtotal;
-                base_paramer.aux.screen_list[slot].resolution.flags = flags;
-            } else {
-                base_paramer.aux.screen_list[slot].feature |= RESOLUTION_AUTO;
-                memset(&base_paramer.aux.screen_list[slot].resolution, 0, sizeof(base_paramer.aux.screen_list[slot].resolution));
-            }
-
-            memset(property,0,sizeof(property));
-            property_get("persist.sys.overscan.aux", property, "overscan 100,100,100,100");
-            sscanf(property, "overscan %d,%d,%d,%d",
-                    &left,
-                    &top,
-                    &right,
-                    &bottom);
-            base_paramer.aux.scan.leftscale = (unsigned short)left;
-            base_paramer.aux.scan.topscale = (unsigned short)top;
-            base_paramer.aux.scan.rightscale = (unsigned short)right;
-            base_paramer.aux.scan.bottomscale = (unsigned short)bottom;
-
-            memset(property,0,sizeof(property));
-            property_get("persist.sys.color.aux", property, "Auto");
-            if (strncmp(property, "Auto", 4) != 0){
-                char color[16];
-                char depth[16];
-
-                sscanf(property, "%s-%s", color, depth);
-                if (strncmp(color, "RGB", 3) == 0)
-                    base_paramer.aux.screen_list[slot].format = output_rgb;
-                else if (strncmp(color, "YCBCR444", 8) == 0)
-                    base_paramer.aux.screen_list[slot].format = output_ycbcr444;
-                else if (strncmp(color, "YCBCR422", 8) == 0)
-                    base_paramer.aux.screen_list[slot].format = output_ycbcr422;
-                else if (strncmp(color, "YCBCR420", 8) == 0)
-                    base_paramer.aux.screen_list[slot].format = output_ycbcr420;
-                else {
-                    base_paramer.aux.screen_list[slot].feature |= COLOR_AUTO;
-                    base_paramer.aux.screen_list[slot].format = output_ycbcr_high_subsampling;
-                }
-
-                if (strncmp(depth, "8bit", 4) == 0)
-                    base_paramer.aux.screen_list[slot].depthc = depth_24bit;
-                else if (strncmp(depth, "10bit", 5) == 0)
-                    base_paramer.aux.screen_list[slot].depthc = depth_30bit;
-                else
-                    base_paramer.aux.screen_list[slot].depthc = Automatic;
-            } else {
-                base_paramer.aux.screen_list[slot].feature |= COLOR_AUTO;
-                base_paramer.aux.screen_list[slot].depthc = Automatic;
-                base_paramer.aux.screen_list[slot].format = output_ycbcr_high_subsampling;
-            }
-
-            memset(property,0,sizeof(property));
-            property_get("persist.sys.hdcp1x.aux", property, "0");
-            if (atoi(property) > 0)
-                base_paramer.aux.screen_list[slot].feature |= HDCP1X_EN;
-
-            memset(property,0,sizeof(property));
-            property_get("persist.sys.resolution_white.aux", property, "0");
-            if (atoi(property) > 0)
-                base_paramer.aux.screen_list[slot].feature |= RESOLUTION_WHITE_EN;
-            /*add for BCSH*/
-            saveBcshConfig(&base_paramer, HWC_DISPLAY_EXTERNAL_BIT);
-#ifdef TEST_BASE_PARMARTER
-            /*save aux fb & device*/
-            saveHwcInitalInfo(&base_paramer, HWC_DISPLAY_EXTERNAL_BIT);
-#endif
-        }
-    }
-
-    if (mlut != NULL) {
-        int mainLutSize = mlut->main.size*sizeof(uint16_t);
-        int auxLutSize = mlut->aux.size*sizeof(uint16_t);
-        if (mainLutSize) {
-            base_paramer.main.mlutdata.size = mlut->main.size;
-            memcpy(base_paramer.main.mlutdata.lred, mlut->main.lred, mainLutSize);
-            memcpy(base_paramer.main.mlutdata.lgreen, mlut->main.lred, mainLutSize);
-            memcpy(base_paramer.main.mlutdata.lblue, mlut->main.lred, mainLutSize);
-        }
-
-        if (auxLutSize) {
-            base_paramer.aux.mlutdata.size = mlut->aux.size;
-            memcpy(base_paramer.aux.mlutdata.lred, mlut->aux.lred, mainLutSize);
-            memcpy(base_paramer.aux.mlutdata.lgreen, mlut->aux.lred, mainLutSize);
-            memcpy(base_paramer.aux.mlutdata.lblue, mlut->aux.lred, mainLutSize);
-        }
-    }
-    freeLutInfo();
-    lseek(file, 0L, SEEK_SET);
-    write(file, (char*)(&base_paramer.main), sizeof(base_paramer.main));
-    lseek(file, BASE_OFFSET, SEEK_SET);
-    write(file, (char*)(&base_paramer.aux), sizeof(base_paramer.aux));
-    close(file);
-    sync();
-    /*
-       ALOGD("[%s] hdmi:%d,%d,%d,%d,%d,%d foundMainIdx %d\n", __FUNCTION__,
-       base_paramer.main.resolution.hdisplay,
-       base_paramer.main.resolution.vdisplay,
-       base_paramer.main.resolution.hsync_start,
-       base_paramer.main.resolution.hsync_end,
-       base_paramer.main.resolution.htotal,
-       base_paramer.main.resolution.flags,
-       foundMainIdx);
-
-       ALOGD("[%s] tve:%d,%d,%d,%d,%d,%d foundAuxIdx %d\n", __FUNCTION__,
-       base_paramer.aux.resolution.hdisplay,
-       base_paramer.aux.resolution.vdisplay,
-       base_paramer.aux.resolution.hsync_start,
-       base_paramer.aux.resolution.hsync_end,
-       base_paramer.aux.resolution.htotal,
-       base_paramer.aux.resolution.flags,
-       foundAuxIdx);
-     */
+	sync();	
 }
 
-#endif
+int parse_white_mode() {
+	
+	tinyxml2::XMLDocument doc;
+	int i = 0;
+	doc.LoadFile("/usr/share/resolution_white.xml");
+
+	tinyxml2::XMLElement* root=doc.RootElement();
+	if (!root)
+	return -1;
+
+	tinyxml2::XMLElement* resolution = root->FirstChildElement("resolution");
+
+	while (resolution) {
+		drmModeModeInfo m;
+
+		#define PARSE(x) \
+		tinyxml2::XMLElement* _##x = resolution->FirstChildElement(#x); \
+		if (!_##x) { \
+		printf("------> failed to parse %s\n", #x); \
+		resolution = resolution->NextSiblingElement(); \
+		continue; \
+		} \
+		m.x = atoi(_##x->GetText())
+		#define PARSE_HEX(x) \
+		tinyxml2::XMLElement* _##x = resolution->FirstChildElement(#x); \
+		if (!_##x) { \
+		printf("------> failed to parse %s\n", #x); \
+		resolution = resolution->NextSiblingElement(); \
+		continue; \
+		} \
+		sscanf(_##x->GetText(), "%x", &m.x);
+		PARSE(clock);
+		PARSE(hdisplay);
+		PARSE(hsync_start);
+		PARSE(hsync_end);
+		PARSE(hskew);
+		PARSE(vdisplay);
+		PARSE(vsync_start);
+		PARSE(vsync_end);
+		PARSE(vscan);
+		PARSE(vrefresh);
+		PARSE_HEX(flags);
+		PARSE(htotal);
+		drm_mode_info_list.drm_mode_info[i].clock = m.clock;
+		drm_mode_info_list.drm_mode_info[i].hdisplay = m.hdisplay;
+		drm_mode_info_list.drm_mode_info[i].hsync_start = m.hsync_start;
+		drm_mode_info_list.drm_mode_info[i].hsync_end = m.hsync_end;
+		drm_mode_info_list.drm_mode_info[i].hskew = m.hskew;
+		drm_mode_info_list.drm_mode_info[i].vdisplay = m.vdisplay;
+		drm_mode_info_list.drm_mode_info[i].vsync_start = m.vsync_start;
+		drm_mode_info_list.drm_mode_info[i].vsync_end = m.vsync_end;
+		drm_mode_info_list.drm_mode_info[i].vscan = m.vscan;
+		drm_mode_info_list.drm_mode_info[i].vrefresh = m.vrefresh;
+		drm_mode_info_list.drm_mode_info[i].flags = m.flags;
+		drm_mode_info_list.drm_mode_info[i].htotal = m.htotal;
+		i++;
+		/* add modes in "resolution.xml" to white list */
+		resolution = resolution->NextSiblingElement();
+	}
+	drm_mode_info_list.count = i;
+	return 0;
+}
+
+bool check_mode(void* mode_info) {
+	
+	if (mode_info == NULL) {
+		return false;
+	}
+	drmModeModeInfo *m = (drmModeModeInfo*)mode_info;
+
+	for (int i=0; i<drm_mode_info_list.count; i++) {
+		if (drm_mode_info_list.drm_mode_info[i].clock == m->clock && \
+			drm_mode_info_list.drm_mode_info[i].hdisplay == m->hdisplay && \
+			drm_mode_info_list.drm_mode_info[i].hsync_start == m->hsync_start && \
+			drm_mode_info_list.drm_mode_info[i].hsync_end == m->hsync_end && \
+			drm_mode_info_list.drm_mode_info[i].vdisplay == m->vdisplay&& \
+			drm_mode_info_list.drm_mode_info[i].vsync_start == m->vsync_start&& \
+			drm_mode_info_list.drm_mode_info[i].vsync_end == m->vsync_end&& \
+			drm_mode_info_list.drm_mode_info[i].vrefresh == m->vrefresh&& \
+			drm_mode_info_list.drm_mode_info[i].flags == m->flags&& \
+			drm_mode_info_list.drm_mode_info[i].htotal == m->htotal
+			) {
+			printf("check_mode is true:clock=%d,hdisplay=%d,hsync_start=%d,hsync_end=%d,\
+					vdisplay=%d,vsync_start=%d,vsync_end=%d,vrefresh=%d,flags=0x%x,htotal=%d\n",
+					m->clock,m->hdisplay,m->hsync_start,m->hsync_end,m->vdisplay,m->vsync_start,\
+					m->vsync_end,m->vrefresh,m->flags,m->htotal);
+			return true;
+		}
+		
+	}
+    
+	return false;
+}
+
+
+
+
+
 
 

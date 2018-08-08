@@ -40,6 +40,10 @@ int hdmi_get_last_resolution(int* xres, int* yres, int* refresh, bool* interlace
 
 void set_best_hdmi_mode(int xres, int yres, int refresh, bool interlaced);
 
+int parse_white_mode();
+
+bool check_mode(void* mode_info);
+
 #ifdef  __cplusplus
   }
 #endif

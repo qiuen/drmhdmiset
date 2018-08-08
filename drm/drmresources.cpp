@@ -85,7 +85,6 @@ int DrmResources::UpdatePrimary() {
 
    bool found_primary = false;
    for (auto &conn : connectors_) {
-    printf("+++possible_displays=%d,built_in=%d,state=%d\n",conn->possible_displays(),conn->built_in(),conn->state());
     conn->UpdateModes();
     if (!(conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
       continue;
@@ -94,13 +93,11 @@ int DrmResources::UpdatePrimary() {
     if (conn->state() != DRM_MODE_CONNECTED)
       continue;
     found_primary = true;
-    printf("++++++++++++++00000000000000000000000,type=%d\n",conn->get_type());
     SetPrimaryDisplay(conn.get());
   }
   if (!found_primary) {
     for (auto &conn : connectors_) {
       conn->UpdateModes();
-      printf("+++possible_displays=%d,built_in=%d,state=%d\n",conn->possible_displays(),conn->built_in(),conn->state());
 
       if (!(conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
         continue;
@@ -108,7 +105,6 @@ int DrmResources::UpdatePrimary() {
         continue;
       found_primary = true;
       SetPrimaryDisplay(conn.get());
-      printf("+++++++++++++++++111111111111111111111,type=%d\n", conn->get_type());
     }
   }
 //    printf("++++++found_primary=%d\n",found_primary);
@@ -119,7 +115,6 @@ int DrmResources::UpdatePrimary() {
       if (!(conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
         continue;
       found_primary = true;
-      printf("++++++++++++++++++++++++2222222222222222222\n");
       SetPrimaryDisplay(conn.get());
     }
   }
